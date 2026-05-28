@@ -1,0 +1,256 @@
+require('dotenv').config();
+const server = require('./server');
+const Dispatcher = require('./services/dispatcher');
+const { database, getAppSettings } = require('./services/database');
+const fs = require('fs');
+const path = require('path');
+
+// Détection d'environnement strict
+const IS_RAILWAY = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+const IS_RENDER = !!process.env.RENDER_EXTERNAL_URL;
+
+async function bootstrap() {
+    try {
+        // Chargement dynamique de .env.railway si présent (en priorité)
+        if (IS_RAILWAY && fs.existsSync('.env.railway')) {
+            console.log("[System] Loading environment from: .env.railway");
+            const envContent = fs.readFileSync('.env.railway', 'utf-8');
+            const envConfig = require('dotenv').parse(envContent);
+            for (const k in envConfig) {
+                process.env[k] = envConfig[k];
+            }
+        } else {
+            console.log("[System] Loading environment from: .env");
+        }
+
+        // Logique de Port : 8080 par défaut pour Railway
+        const portToUse = process.env.PORT || 8080;
+        
+        console.log(`[System] Final PORT determined: ${portToUse}`);
+        console.log('🚀 DÉMARRAGE VERSION RAILWAY STABLE SHOPTONBOT...');
+        
+        // 1. Initialisation de la BDD
+        if (database && database.init) {
+            await database.init();
+        }
+
+        // 2. Initialisation du Dispatcher (Service central)
+        console.log('📦 Initialisation du Dispatcher...');
+        const dispatcher = new Dispatcher();
+        await dispatcher.init();
+        
+        // --- CHARGEMENT DES HANDLERS ---
+        const { setupStartHandler } = require('./handlers/start');
+        const { setupAdminHandlers } = require('./handlers/admin');
+        const { setupOrderSystem } = require('./handlers/order_system');
+        const { setupSupplierMarketplaceHandlers } = require('./handlers/supplier_marketplace');
+
+        if (typeof setupStartHandler === 'function') setupStartHandler(dispatcher);
+        if (typeof setupAdminHandlers === 'function') setupAdminHandlers(dispatcher);
+        if (typeof setupOrderSystem === 'function') setupOrderSystem(dispatcher);
+        if (typeof setupSupplierMarketplaceHandlers === 'function') setupSupplierMarketplaceHandlers(dispatcher);
+        
+        console.log(`[Dispatcher] Dispatcher initialisé avec ses handlers.`);
+
+        // 3. Initialisation du Serveur Web (Dashboard)
+        console.log(`[System] Initializing server on port: ${portToUse}`);
+        server.setDispatcherInstance(dispatcher);
+        const app = server.createServer(portToUse);
+        
+        // --- IMPORTANT: Enregistrement du bot dans le serveur pour les notifs admin ---
+        const { TelegramChannel } = require('./channels/TelegramChannel');
+        let tgToken = process.env.BOT_TOKEN;
+        
+        try {
+            const settings = await getAppSettings();
+            if (settings && settings.telegram_token) {
+                tgToken = settings.telegram_token;
+                console.log('[System] Using Telegram token from Database configuration');
+            }
+        } catch (e) {
+            console.warn('[System] Failed to load telegram token from Database, using env fallback:', e.message);
+        }
+        
+        let telegramChannel = null;
+        if (tgToken) {
+            telegramChannel = new TelegramChannel(tgToken);
+            dispatcher.registerChannel('telegram', telegramChannel);
+            server.setBotInstance(telegramChannel.bot); // Permet au dashboard d'envoyer des messages
+        }
+
+        // --- WHATSAPP SETUP ---
+        const { WhatsAppSessionChannel } = require('./channels/WhatsAppSessionChannel');
+        let waSessionId = process.env.WHATSAPPD_SESSION_ID || process.env.WHATSAPP_SESSION_ID || process.env.SESSION_ID;
+        if (!waSessionId) {
+            const altKey = Object.keys(process.env).find(k => (k.startsWith('WHATSAPP_SESSION_ID') || k.startsWith('WHATSAPPD_SESSION_ID')) && process.env[k]);
+            if (altKey) waSessionId = process.env[altKey];
+        }
+        if (!waSessionId) waSessionId = 'monshopbot_wa'; // Force fallback if empty
+        if (waSessionId) {
+            const was = new WhatsAppSessionChannel({ sessionId: waSessionId });
+            
+            // Wire up dispatcher handler
+            was.onMessage((msg) => {
+                dispatcher.handleUpdate(was, msg).catch(err => {
+                    console.error('[Main-Handler-Error] whatsapp:', err.message);
+                });
+            });
+
+            // wait for init
+            was.initialize().then(() => {
+                console.log('[DISPATCHER] Canal whatsapp initialisé');
+            }).catch(e => console.error('[DISPATCHER] Erreur whatsapp:', e.message));
+            
+            dispatcher.registerChannel('whatsapp', was);
+            console.log('[DISPATCHER] Canal whatsapp prêt');
+        } else {
+            console.warn('⚠️ [Système] Pas de SESSION_ID WhatsApp trouvé, canal WhatsApp inactif.');
+        }
+        // --- FIN WHATSAPP SETUP ---
+
+
+        const staticUrl = process.env.RENDER_EXTERNAL_URL || process.env.RAILWAY_STATIC_URL || 'localhost';
+        console.log(`🔗 TEST HEALTH : https://${staticUrl}/_health`);
+
+        // 4. Initialisation des canaux de communication
+        console.log('📦 Initialisation des canaux...');
+        
+        // Initialisation des canaux enregistrés dans le dispatcher
+        const channels = await dispatcher.initChannels();
+        
+        const replicaIndex = process.env.RAILWAY_REPLICA_INDEX || process.env.RENDER_REPLICA_INDEX || 0;
+        console.log(`[System] Replica ${replicaIndex}: Starting Telegram channel...`);
+        
+        // Lancement du canal whatsapp
+        const waChannel = dispatcher.channels.get('whatsapp');
+        if (waChannel && replicaIndex == 0) {
+            waChannel.start().then(() => {
+                console.log('✅ [System] WhatsApp channel started in background.');
+            }).catch(e => console.error('❌ [System] Failed to start WhatsApp channel:', e));
+        }
+
+        // Lancement du canal telegram
+        if (telegramChannel && replicaIndex == 0) {
+            telegramChannel.start().then(() => {
+                // Sync bot descriptions on startup
+                getAppSettings().then(settings => {
+                    if (!telegramChannel.bot) return;
+                    if (settings.bot_description) telegramChannel.bot.telegram.setMyDescription(settings.bot_description).catch(() => { });
+                    if (settings.bot_short_description) telegramChannel.bot.telegram.setMyShortDescription(settings.bot_short_description).catch(() => { });
+                    
+                    // Set default commands (French)
+                    telegramChannel.bot.telegram.setMyCommands([
+                        { command: 'start', description: '🏠 Lancer le bot / Accueil' },
+                        { command: 'menu', description: '🛒 Voir le catalogue' },
+                        { command: 'orders', description: '📦 Mes commandes' },
+                        { command: 'help', description: '❓ Aide et support' }
+                    ]).catch(() => { });
+
+                    // English
+                    telegramChannel.bot.telegram.setMyCommands([
+                        { command: 'start', description: '🏠 Start the bot / Home' },
+                        { command: 'menu', description: '🛒 View catalog' },
+                        { command: 'orders', description: '📦 My orders' },
+                        { command: 'help', description: '❓ Help and support' }
+                    ], { language_code: 'en' }).catch(() => { });
+
+                    // German
+                    telegramChannel.bot.telegram.setMyCommands([
+                        { command: 'start', description: '🏠 Bot starten / Startseite' },
+                        { command: 'menu', description: '🛒 Katalog ansehen' },
+                        { command: 'orders', description: '📦 Meine Bestellungen' },
+                        { command: 'help', description: '❓ Hilfe und Support' }
+                    ], { language_code: 'de' }).catch(() => { });
+
+                    // Spanish
+                    telegramChannel.bot.telegram.setMyCommands([
+                        { command: 'start', description: '🏠 Iniciar el bot / Inicio' },
+                        { command: 'menu', description: '🛒 Ver catálogo' },
+                        { command: 'orders', description: '📦 Mis pedidos' },
+                        { command: 'help', description: '❓ Ayuda y soporte' }
+                    ], { language_code: 'es' }).catch(() => { });
+                }).catch(() => { });
+            }).catch(err => {
+                console.error('❌ Error launching Telegram:', err.message);
+            });
+        } else if (telegramChannel) {
+            console.log(`[System] Replica ${replicaIndex}: Bot instance idle (Replica 0 handles bot)`);
+        }
+
+        if (replicaIndex == 0) {
+            try {
+                const { startBroadcastWorker } = require('./services/broadcast');
+                if (telegramChannel) {
+                    startBroadcastWorker(telegramChannel).catch(err => {
+                        console.error('[System] Failed to start broadcast worker:', err.message);
+                    });
+                    console.log('👷 Broadcast Worker active (Replica 0)');
+                }
+            } catch (e) {
+                console.warn('[System] Broadcast worker failed to start:', e.message);
+            }
+
+            // Start expired reservations cleanup interval
+            try {
+                const { cleanupExpiredReservations } = require('./services/inventory_manager');
+                setInterval(async () => {
+                    try {
+                        await cleanupExpiredReservations();
+                    } catch (err) {
+                        console.error('[System] Error in cleanupExpiredReservations:', err.message);
+                    }
+                }, 60000); // run every 1 minute
+                console.log('⏰ Reservation Cleanup Worker active (every 1m, Replica 0)');
+            } catch (e) {
+                console.warn('[System] Reservation Cleanup Worker failed to start:', e.message);
+            }
+            
+            // Start Twitter-Style Recommendation Engine
+            try {
+                const { runRecommendationEngine } = require('./services/recommendation_engine');
+                const { checkAbandonedCarts } = require('./services/smart_reminders');
+                
+                // Run ranker every hour
+                setInterval(runRecommendationEngine, 60 * 60 * 1000);
+                
+                // Run abandoned carts every 15 minutes
+                setInterval(checkAbandonedCarts, 15 * 60 * 1000);
+                
+                console.log('🚀 Recommendation Engine & Carts Workers active (Replica 0)');
+                
+                // Trigger once on startup after 10 seconds
+                setTimeout(() => {
+                    runRecommendationEngine();
+                    checkAbandonedCarts();
+                }, 10000);
+                
+            } catch (e) {
+                console.warn('[System] Recommendation Engine failed to start:', e.message);
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ ERREUR FATALE AU DÉMARRAGE:', error);
+        process.exit(1);
+    }
+}
+
+bootstrap();
+
+// Shutdown handling — libère le verrou TG avant de s'arrêter
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM received. Releasing TG lock and shutting down...');
+    try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+        await supabase.from('bot_stats').update({ tg_lock_owner: null, tg_lock_expires: null }).eq('id', 1);
+        console.log('[TG-LOCK] 🔓 Lock released on SIGTERM.');
+    } catch (e) {
+        console.warn('[TG-LOCK] Could not release lock on SIGTERM:', e.message);
+    }
+    process.exit(0);
+});
+
+module.exports = {};
+// Version 1.0.1 Stable
+// Trigger railway deploy
