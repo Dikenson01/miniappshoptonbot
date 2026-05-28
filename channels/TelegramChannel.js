@@ -111,46 +111,48 @@ class TelegramChannel extends Channel {
         const processUniqueId = Math.random().toString(36).substring(2, 8);
         const instanceId = `replica-${replicaIndex}-${processUniqueId}`;
         const tokenPrefix = this.token ? this.token.split(':')[0] : 'default';
-        const telegramLockId = `tg_lock_${tokenPrefix}`;
-
-        try {
-            const lock = await checkLock(telegramLockId);
-            
-            // If lock exists and isn't ours, check if it's expired
-            if (lock && lock.owner && lock.owner !== instanceId) {
-                const now = Date.now();
-                const expiresAtDate = new Date(lock.expires).getTime();
+        const telegramLockId = `tg_lock`; // We keep 'tg_lock' for original bot
+        
+        const isAlternateBot = this.token && !this.token.startsWith('8836250888'); // 8836250888 is the original bot
+        
+        if (!isAlternateBot) {
+            try {
+                const lock = await checkLock(telegramLockId);
                 
-                if (expiresAtDate > now) {
-                    const expiresAt = new Date(lock.expires).toLocaleTimeString();
-                    console.log(`[TG-LOCK] ⚠️ Session busy (Owner: ${lock.owner}, Expires: ${expiresAt}). Retrying in 30s...`);
+                if (lock && lock.owner && lock.owner !== instanceId) {
+                    const now = Date.now();
+                    const expiresAtDate = new Date(lock.expires).getTime();
+                    
+                    if (expiresAtDate > now) {
+                        const expiresAt = new Date(lock.expires).toLocaleTimeString();
+                        console.log(`[TG-LOCK] ⚠️ Session busy (Owner: ${lock.owner}, Expires: ${expiresAt}). Retrying in 30s...`);
+                        setTimeout(() => this.start(), 30000);
+                        return;
+                    }
+                }
+
+                const claimed = await claimLock(telegramLockId, instanceId);
+                if (!claimed) {
+                    console.log(`[TG-LOCK] ❌ Claim failed. Retrying in 30s...`);
                     setTimeout(() => this.start(), 30000);
                     return;
                 }
-            }
 
-            // Try to claim
-            const claimed = await claimLock(telegramLockId, instanceId);
-            if (!claimed) {
-                console.log(`[TG-LOCK] ❌ Claim failed. Retrying in 30s...`);
+                console.log(`[TG-LOCK] 🎉 Lock obtained by ${instanceId}. launching bot...`);
+                
+                if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+                this.heartbeatInterval = setInterval(async () => {
+                    await claimLock(telegramLockId, instanceId);
+                }, 45000);
+            } catch (err) {
+                console.error('[TG-LOCK] Error during lock sequence:', err);
                 setTimeout(() => this.start(), 30000);
                 return;
             }
-
-            console.log(`[TG-LOCK] 🎉 Lock obtained by ${instanceId}. launching bot...`);
-            
-            // Launch bot via heartbeat
-            if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
-            this.heartbeatInterval = setInterval(async () => {
-                await claimLock(telegramLockId, instanceId);
-            }, 45000); // refresh every 45s (lock TTL is 60s)
-        } catch (err) {
-            console.error('[TG-LOCK] Error during lock sequence:', err);
-            setTimeout(() => this.start(), 30000);
-            return;
+            console.log(`[TG-LOCK] Telegram lock claimed by ${instanceId}`);
+        } else {
+            console.log(`[TG-LOCK] Bypassing distributed lock for alternate bot instance (${instanceId}).`);
         }
-
-        console.log(`[TG-LOCK] Telegram lock claimed by ${instanceId}`);
         console.log(`[TG] Lancement du bot (${this.token.substring(0, 4)}****...)...`);
         
         // Build launch options
