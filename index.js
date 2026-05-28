@@ -59,7 +59,8 @@ async function bootstrap() {
         
         // --- IMPORTANT: Enregistrement du bot dans le serveur pour les notifs admin ---
         const { TelegramChannel } = require('./channels/TelegramChannel');
-        let tgToken = process.env.BOT_TOKEN;
+        // On force le token du mini-app en fallback si Railway ne le trouve pas
+        let tgToken = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '8880835077:AAF8kG47q9_jybLnDbhTyl6kHSdHy8lg46o';
         
         try {
             const settings = await getAppSettings();
@@ -85,7 +86,7 @@ async function bootstrap() {
             const altKey = Object.keys(process.env).find(k => (k.startsWith('WHATSAPP_SESSION_ID') || k.startsWith('WHATSAPPD_SESSION_ID')) && process.env[k]);
             if (altKey) waSessionId = process.env[altKey];
         }
-        if (!waSessionId) waSessionId = 'monshopbot_wa'; // Force fallback if empty
+        if (!waSessionId) waSessionId = 'minishopbot_wa'; // Force fallback if empty
         if (waSessionId) {
             const was = new WhatsAppSessionChannel({ sessionId: waSessionId });
             
