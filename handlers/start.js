@@ -567,84 +567,45 @@ async function getMainMenuKeyboard(ctx, settings, user, isFournisseur = false, i
 
     const baseDomain = process.env.RENDER_EXTERNAL_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : 'https://farmstegridy-bot.onrender.com');
     const langCode = user?.language_code || 'fr';
-    const catalogUrl = (settings.mini_app_url ? `${settings.mini_app_url}/catalog` : `${baseDomain}/catalog`) + `?lang=${langCode}` + `&v=${Date.now()}`;
+    const catalogUrl = (settings.mini_app_url ? `${settings.mini_app_url}/catalog` : `${baseDomain}/catalog`) + `?lang=${langCode}&v=${Date.now()}`;
+    const dashboardUrl = (settings.mini_app_url ? `${settings.mini_app_url}/dashboard` : `${baseDomain}/dashboard`) + `?lang=${langCode}&v=${Date.now()}`;
+    const supplierUrl = (settings.mini_app_url ? `${settings.mini_app_url}/dashboard` : `${baseDomain}/dashboard`) + `?lang=${langCode}&supplier=1&v=${Date.now()}`;
 
-    // Ligne 1 : Commander (Gros bouton principal)
-    buttons.push([Markup.button.callback(`${settings.ui_icon_catalog || '🛍'} ${t(user, 'btn_catalog_classic', 'CATALOGUE CLASSIQUE')}`, 'view_catalog')]);
-    if (ctx.platform !== 'whatsapp') {
-        buttons.push([Markup.button.webApp(t(user, 'btn_catalog_miniapp', '✨ CATALOGUE MINI APP ✨'), catalogUrl)]);
-    }
-    
-    // Suivi commande (Uniquement si panier plein)
-    const { userCarts } = require('./order_system');
-    const cart = userCarts.get(`${ctx.platform}_${ctx.from.id}`) || [];
-    if (cart.length > 0) {
-        buttons.push([Markup.button.callback(`🛒 ${t(user, 'btn_cart').toUpperCase()} (${cart.length})`, 'view_cart')]);
-    }
+    // Helper to support both Telegram (Web App) and WhatsApp (URL link)
+    const makeAppBtn = (label, url) => ctx.platform === 'whatsapp' ? Markup.button.url(label, url) : Markup.button.webApp(label, url);
 
-    // Ligne 2 : Panier & Mes Commandes
-    buttons.push([
-        Markup.button.callback(`${settings.ui_icon_cart || '🛒'} ${t(user, 'btn_cart', 'Panier')}`, 'view_cart'),
-        Markup.button.callback(`${settings.ui_icon_orders || '📦'} ${t(user, 'btn_orders', 'Commandes')}`, 'my_orders')
-    ]);
+    // Main App Launcher Button
+    buttons.push([makeAppBtn(t(user, 'btn_catalog_miniapp', '✨ OUVRIR L\'APPLICATION ✨'), catalogUrl)]);
 
-    // Ligne 3 : Aide & Contact
-    const row3 = [];
-    if (settings.enable_help_menu !== false) {
-        row3.push(Markup.button.callback(`${settings.ui_icon_support || '❓'} ${t(user, 'btn_support', 'Aide')}`, 'help_menu'));
-    }
-    row3.push(Markup.button.callback(`${settings.ui_icon_contact || '📱'} ${t(user, 'btn_contact', 'Contact')}`, 'private_contact'));
-    if (row3.length > 0) buttons.push(row3);
-
-    // Ligne 4 : Parrainage & Canal
-    const row4 = [];
-    if (settings.enable_referral !== false) {
-        row4.push(Markup.button.callback(`${settings.ui_icon_profile || '🎁'} ${t(user, 'btn_referral', 'Parrain')}`, 'my_referrals'));
-    }
-    row4.push(Markup.button.callback(`${settings.ui_icon_channel || '📢'} ${t(user, 'btn_channel', 'Canal')}`, 'channel_link'));
-    if (row4.length > 0) buttons.push(row4);
-
-    // Ligne 5 : Espace Livreur / Fournisseur
-    const spaces = [];
-    if (user?.is_livreur) spaces.push(Markup.button.callback(`${settings.ui_icon_livreur || '🚴'} ${t(user, 'btn_livreur_menu', 'Livreur')}`, 'livreur_menu'));
-    if (settings.enable_marketplace !== false) {
-        if (user?.is_supplier || user?.is_mp_admin || isFournisseur) {
-            spaces.push(Markup.button.callback(t(user, 'btn_supplier_menu', '🏪 Fourn.'), 'supplier_menu'));
-        }
-    }
-    if (spaces.length > 0) buttons.push(spaces);
-
-    // Ligne de fin : Paramètres & Admin
-    const footers = [Markup.button.callback(`${settings.btn_settings || '⚙️'} ${t(user, 'btn_settings', 'Réglages')}`, 'user_settings')];
+    // Role-specific Admin/Supplier Buttons
+    const roleButtons = [];
     if (user?.is_admin || isAdminUser) {
-        footers.push(Markup.button.callback(`${settings.ui_icon_admin || '🛠'} ${t(user, 'btn_admin', 'Admin')}`, 'admin_menu'));
+        roleButtons.push(makeAppBtn(`👑 Panel Admin`, dashboardUrl));
     }
-    if (footers.length > 0) buttons.push(footers);
+    if (settings.enable_marketplace !== false && (user?.is_supplier || user?.is_mp_admin || isFournisseur)) {
+        roleButtons.push(makeAppBtn(`🏪 Panel Fournisseur`, supplierUrl));
+    }
+    if (roleButtons.length > 0) buttons.push(roleButtons);
 
     return Markup.inlineKeyboard(buttons);
 }
 
 async function getLivreurMenuKeyboard(ctx, settings, user, hasActiveOrders = false, isAdminUser = false) {
-    const isAvail = user?.is_available || user?.data?.is_available;
     const baseDomain = process.env.RENDER_EXTERNAL_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : 'https://farmstegridy-bot.onrender.com');
     const langCode = user?.language_code || 'fr';
-    const livreurUrl = (settings.mini_app_url ? `${settings.mini_app_url}/livreur` : `${baseDomain}/livreur`) + `?lang=${langCode}` + `&v=${Date.now()}`;
+    const livreurUrl = (settings.mini_app_url ? `${settings.mini_app_url}/livreur` : `${baseDomain}/livreur`) + `?lang=${langCode}&v=${Date.now()}`;
+    const dashboardUrl = (settings.mini_app_url ? `${settings.mini_app_url}/dashboard` : `${baseDomain}/dashboard`) + `?lang=${langCode}&v=${Date.now()}`;
+
+    const makeAppBtn = (label, url) => ctx.platform === 'whatsapp' ? Markup.button.url(label, url) : Markup.button.webApp(label, url);
 
     const buttons = [
-        [Markup.button.webApp(t(user, 'btn_livreur_miniapp', '✨ ESPACE LIVREUR (MINI APP) ✨'), livreurUrl)],
-        [Markup.button.callback(isAvail ? '🔴 ' + t(user, 'btn_avail_off', 'Indisponible') : '🟢 ' + t(user, 'btn_avail_on', 'Disponible'), isAvail ? 'set_dispo_false' : 'set_dispo_true')],
-        [
-            Markup.button.callback(t(user, 'btn_orders_available_label', '📦 Commandes'), 'show_available_orders'), 
-            Markup.button.callback(t(user, 'btn_planned_orders_label', '🗓 Planifiées'), 'show_planned_orders')
-        ],
-        [
-            Markup.button.callback(t(user, 'btn_history_orders_label', '📈 Historique'), 'my_deliveries'), 
-            Markup.button.callback(t(user, 'btn_client_mode_label', '🛍 Client'), 'client_mode_force')
-        ],
-        [Markup.button.callback(t(user, 'btn_livreur_settings', '⚙️ Réglages'), 'user_settings')]
+        [makeAppBtn(t(user, 'btn_livreur_miniapp', '🚴 OUVRIR L\'APP LIVREUR'), livreurUrl)],
+        [Markup.button.callback(t(user, 'btn_client_mode_label', '🛍 Mode Client'), 'client_mode_force')]
     ];
-    if (hasActiveOrders) buttons.unshift([Markup.button.callback(t(user, 'btn_active_deliveries_label', '🚚 MES LIVRAISONS EN COURS 🔥'), 'active_deliveries')]);
-    if (user?.is_admin || isAdminUser) buttons.push([Markup.button.callback(`🛠 ${t(user, 'btn_admin', 'Admin Panel')}`, 'admin_menu')]);
+    
+    if (user?.is_admin || isAdminUser) {
+        buttons.push([makeAppBtn(`👑 Panel Admin`, dashboardUrl)]);
+    }
     
     return Markup.inlineKeyboard(buttons);
 }
