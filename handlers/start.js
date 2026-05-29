@@ -584,6 +584,7 @@ async function getMainMenuKeyboard(ctx, settings, user, isFournisseur = false, i
     // Role-specific Admin/Supplier/Livreur Buttons (Web Apps)
     if (user?.is_admin || isAdminUser) {
         buttons.push([makeAppBtn(`👑 Console Admin`, dashboardUrl)]);
+        buttons.push([Markup.button.callback(`🛠 ${t(user, 'btn_admin', 'Panel Admin (Classique)')}`, 'admin_menu')]);
     }
     if (user?.is_livreur) {
         buttons.push([makeAppBtn(`🚴 Espace Livreur`, livreurUrl)]);
