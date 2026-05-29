@@ -6928,6 +6928,7 @@
                             <button class="btn btn-outline btn-sm" onclick="editUserProfileUI('${u.doc_id}', '${(u.first_name || '').replace(/'/g, "\\'")}', '${u.phone || ''}')" style="border-color:#ff9500; color:#ff9500">✏️ Profil</button>
                             <button class="btn btn-outline btn-sm" onclick="viewUserAddresses('${u.doc_id}')" style="border-color:#5ac8fa; color:#5ac8fa">📍 Adresses</button>
                             <button class="btn btn-outline btn-sm" onclick="checkUserStatus('${u.doc_id}')" style="border-color:var(--accent); color:var(--accent)">🔄 Check</button>
+                            <button class="btn btn-outline btn-sm" style="border-color:#007aff; color:#007aff" onclick="openTelegramProfile(null, '${u.username || ''}', '${u.platform_id || ''}')">👤 Profil Telegram</button>
                             <button class="btn btn-outline btn-sm" onclick="delUser('${u.doc_id}')">Supprimer</button>
                             ${u.is_blocked ? `<button class="btn btn-accent btn-sm" onclick="toggleBlock('${u.doc_id}', false)">Débloquer</button>` : `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="toggleBlock('${u.doc_id}', true)">Bloquer</button>`}
                             
@@ -7009,6 +7010,7 @@
                             ${u.is_approved === false ?
                                 `<button class="m-btn m-btn-approve" onclick="approveUserJS('${u.doc_id}')">✅ APPROUVER</button>` : ''
                             }
+                            <button class="m-btn" style="flex: 1 1 100%; color:#007aff; border-color:rgba(0,122,255,0.3);" onclick="openTelegramProfile(null, '${u.username || ''}', '${u.platform_id || ''}')">👤 Accéder au Profil Telegram</button>
                             <button class="m-btn m-btn-danger" onclick="delUser('${u.doc_id}')" style="flex: 1 1 100%;">🗑️ Supprimer</button>
                         </div>
                     </div>`;
