@@ -369,7 +369,8 @@ function setupAdminHandlers(bot) {
             const dashboardUrl = `${baseDomain}/dashboard?lang=${langCode}`;
             rows.push([Markup.button.webApp('✨ ACCÉDER AU DASHBOARD (MINI APP) ✨', dashboardUrl)]);
 
-            rows.push([Markup.button.callback(t(user, 'btn_admin_orders', '📦 Commandes'), 'admin_orders'), Markup.button.callback(t(user, 'btn_admin_users', '👥 Utilisateurs'), 'admin_users')]);
+            rows.push([Markup.button.callback(t(user, 'btn_admin_orders', '📦 Commandes'), 'admin_orders')]);
+            rows.push([Markup.button.callback(t(user, 'btn_admin_users', '👥 Utilisateurs'), 'admin_users')]);
             rows.push([Markup.button.callback(t(user, 'btn_admin_livreurs', '🚴 Livreurs'), 'admin_livreurs')]);
             rows.push([Markup.button.callback(t(user, 'btn_admin_stats', '📊 Statistiques'), 'admin_stats')]);
             rows.push([Markup.button.callback(supportLabel, 'admin_support_queue')]);
