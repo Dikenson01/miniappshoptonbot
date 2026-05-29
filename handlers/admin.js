@@ -206,6 +206,19 @@ function setupAdminHandlers(bot) {
                 const res = await sendTelegramMessage(targetId, `👮 <b>MESSAGE DE L'ADMINISTRATION</b>\n\n${text ? `"${text}"` : (options.photo ? '📸 Photo reçue' : '🎥 Vidéo reçue')}`, options);
                 if (res) {
                     console.log(`[Relay-Admin] ✅ Envoyé avec succès à ${targetId}`);
+                    
+                    try {
+                        const { getUser, updateUser } = require('../services/database');
+                        const targetUser = await getUser(targetId);
+                        if (targetUser) {
+                            const history = targetUser.data?.chat_history || [];
+                            history.push({ role: 'admin', text: text || (options.photo ? '[Photo]' : '[Vidéo]'), ts: Date.now(), from: ctx.from.first_name || 'Admin' });
+                            await updateUser(targetId, { data: { ...targetUser.data, chat_history: history } });
+                        }
+                    } catch(err) {
+                        console.error('Failed to save admin chat history', err);
+                    }
+
                     return ctx.reply(t(ctx, 'msg_b_message_transmis_client', "✅ <b>Message transmis au client !</b>"), { parse_mode: 'HTML' });
                 }
             } catch (e) {
@@ -238,6 +251,19 @@ function setupAdminHandlers(bot) {
             for (const adminId of targetAdmins) {
                 await sendTelegramMessage(adminId, `👤 <b>SUPPORT CLIENT (${ctx.from.first_name})</b>\n\n${text ? `"${text}"` : ''}`, options).catch(() => {});
             }
+            
+            try {
+                const { getUser, updateUser } = require('../services/database');
+                const clientUser = await getUser(userKey);
+                if (clientUser) {
+                    const history = clientUser.data?.chat_history || [];
+                    history.push({ role: 'user', text: text || (options.photo ? '[Photo]' : '[Vidéo]'), ts: Date.now(), from: ctx.from.first_name || 'Client' });
+                    await updateUser(userKey, { data: { ...clientUser.data, chat_history: history } });
+                }
+            } catch(err) {
+                console.error('Failed to save user chat history', err);
+            }
+
             return ctx.reply(t(ctx, 'msg_b_message_transmis', "✅ <b>Message transmis à l\'administration !</b>"), { parse_mode: 'HTML' });
         }
 
