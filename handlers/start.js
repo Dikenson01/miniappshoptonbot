@@ -570,62 +570,26 @@ async function getMainMenuKeyboard(ctx, settings, user, isFournisseur = false, i
     const catalogUrl = (settings.mini_app_url ? `${settings.mini_app_url}/catalog` : `${baseDomain}/catalog`) + `?lang=${langCode}&v=${Date.now()}`;
     const dashboardUrl = (settings.mini_app_url ? `${settings.mini_app_url}/dashboard` : `${baseDomain}/dashboard`) + `?lang=${langCode}&v=${Date.now()}`;
     const supplierUrl = (settings.mini_app_url ? `${settings.mini_app_url}/dashboard` : `${baseDomain}/dashboard`) + `?lang=${langCode}&supplier=1&v=${Date.now()}`;
+    const livreurUrl = (settings.mini_app_url ? `${settings.mini_app_url}/livreur` : `${baseDomain}/livreur`) + `?lang=${langCode}&v=${Date.now()}`;
 
     // Helper to support both Telegram (Web App) and WhatsApp (URL link)
     const makeAppBtn = (label, url) => ctx.platform === 'whatsapp' ? Markup.button.url(label, url) : Markup.button.webApp(label, url);
 
-    // Ligne 1 : Catalogue Classique
-    buttons.push([Markup.button.callback(`${settings.ui_icon_catalog || '🛍'} CATALOGUE CLASSIQUE`, 'view_catalog')]);
-    
-    // Ligne 2 : Catalogue Mini App
+    // Ligne 1 : Catalogue Mini App
     buttons.push([makeAppBtn(t(user, 'btn_catalog_miniapp', '✨ CATALOGUE MINI APP ✨'), catalogUrl)]);
 
-    // Ligne 3 : Panier & Commandes
-    const { userCarts } = require('./order_system');
-    const cart = userCarts.get(`${ctx.platform}_${ctx.from.id}`) || [];
-    if (cart.length > 0) {
-        buttons.push([Markup.button.callback(`🛒 ${t(user, 'btn_cart', 'Panier').toUpperCase()} (${cart.length})`, 'view_cart')]);
-    } else {
-        buttons.push([
-            Markup.button.callback(`${settings.ui_icon_cart || '🛒'} ${t(user, 'btn_cart', 'Panier')}`, 'view_cart'),
-            Markup.button.callback(`${settings.ui_icon_orders || '📦'} ${t(user, 'btn_orders', 'Commandes')}`, 'my_orders')
-        ]);
-    }
+    // Ligne 2 : Bouton de langue
+    buttons.push([Markup.button.callback('🌐 Langue / Language', 'set_language_menu')]);
 
-    // Ligne 4 : Aide & Contact
-    const row3 = [];
-    if (settings.enable_help_menu !== false) {
-        row3.push(Markup.button.callback(`${settings.ui_icon_support || '❓'} ${t(user, 'btn_support', 'Aide')}`, 'help_menu'));
-    }
-    row3.push(Markup.button.callback(`${settings.ui_icon_contact || '📱'} ${t(user, 'btn_contact', 'Contact')}`, 'private_contact'));
-    if (row3.length > 0) buttons.push(row3);
-
-    // Ligne 5 : Parrainage & Canal
-    const row4 = [];
-    if (settings.enable_referral !== false) {
-        row4.push(Markup.button.callback(`${settings.ui_icon_profile || '🎁'} ${t(user, 'btn_referral', 'Parrain')}`, 'my_referrals'));
-    }
-    row4.push(Markup.button.callback(`${settings.ui_icon_channel || '📢'} ${t(user, 'btn_channel', 'Canal')}`, 'channel_link'));
-    if (row4.length > 0) buttons.push(row4);
-
-    // Role-specific Buttons
-    const spaces = [];
-    if (user?.is_livreur) spaces.push(Markup.button.callback(`${settings.ui_icon_livreur || '🚴'} Livreur`, 'livreur_menu'));
-    if (settings.enable_marketplace !== false && (user?.is_supplier || user?.is_mp_admin || isFournisseur)) {
-        spaces.push(makeAppBtn(`🏪 Panel Fournisseur`, supplierUrl));
-    }
-    if (spaces.length > 0) buttons.push(spaces);
-
-    const footers = [Markup.button.callback(`${settings.btn_settings || '⚙️'} ${t(user, 'btn_settings', 'Réglages')}`, 'user_settings')];
+    // Role-specific Admin/Supplier/Livreur Buttons (Web Apps)
     if (user?.is_admin || isAdminUser) {
-        footers.push(makeAppBtn(`👑 Console Admin`, dashboardUrl));
-        footers.push(Markup.button.callback(`${settings.ui_icon_admin || '🛠'} Admin Bot`, 'admin_menu'));
+        buttons.push([makeAppBtn(`👑 Console Admin`, dashboardUrl)]);
     }
-    if (footers.length > 0) buttons.push(footers);
-
-    // Mode client for users who are admin or livreurs
-    if (user?.is_admin || isAdminUser || user?.is_livreur || user?.is_supplier || user?.is_mp_admin || isFournisseur) {
-        buttons.push([Markup.button.callback(`🛍 Mode Client`, 'client_mode_force')]);
+    if (user?.is_livreur) {
+        buttons.push([makeAppBtn(`🚴 Espace Livreur`, livreurUrl)]);
+    }
+    if (settings.enable_marketplace !== false && (user?.is_supplier || user?.is_mp_admin || isFournisseur)) {
+        buttons.push([makeAppBtn(`🏪 Panel Fournisseur`, supplierUrl)]);
     }
 
     return Markup.inlineKeyboard(buttons);
