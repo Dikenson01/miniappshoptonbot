@@ -7792,7 +7792,7 @@
                 if (isClickableChild) return;
             }
 
-            if (username && username !== 'undefined' && username !== 'null') {
+            if (username && username !== 'undefined' && username !== 'null' && username.trim() !== '') {
                 const cleanUsername = username.replace('@', '');
                 if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
                     try {
@@ -7803,9 +7803,17 @@
                 } else {
                     window.open(`https://t.me/${cleanUsername}`, '_blank');
                 }
-            } else if (platformId && platformId !== 'undefined') {
+            } else if (platformId && platformId !== 'undefined' && platformId !== 'null') {
                 const cleanId = String(platformId).replace('telegram_', '');
-                window.location.href = `tg://user?id=${cleanId}`;
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+                    try {
+                        window.Telegram.WebApp.openTelegramLink(`tg://user?id=${cleanId}`);
+                    } catch(e) {
+                        window.location.href = `tg://user?id=${cleanId}`;
+                    }
+                } else {
+                    window.location.href = `tg://user?id=${cleanId}`;
+                }
             }
         }
 
