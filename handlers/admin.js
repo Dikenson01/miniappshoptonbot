@@ -206,7 +206,7 @@ function setupAdminHandlers(bot) {
                 const res = await sendTelegramMessage(targetId, `👮 <b>MESSAGE DE L'ADMINISTRATION</b>\n\n${text ? `"${text}"` : (options.photo ? '📸 Photo reçue' : '🎥 Vidéo reçue')}`, options);
                 if (res) {
                     console.log(`[Relay-Admin] ✅ Envoyé avec succès à ${targetId}`);
-                    return ctx.reply(t(ctx, 'msg_b_message_transmis', "✅ <b>Message transmis au client !</b>"), { parse_mode: 'HTML' });
+                    return ctx.reply(t(ctx, 'msg_b_message_transmis_client', "✅ <b>Message transmis au client !</b>"), { parse_mode: 'HTML' });
                 }
             } catch (e) {
                 console.error(`[AdminRelay] Error:`, e.message);
@@ -369,8 +369,7 @@ function setupAdminHandlers(bot) {
             const dashboardUrl = `${baseDomain}/dashboard?lang=${langCode}`;
             rows.push([Markup.button.webApp('✨ ACCÉDER AU DASHBOARD (MINI APP) ✨', dashboardUrl)]);
 
-            rows.push([Markup.button.callback(t(user, 'btn_admin_orders', '📦 Commandes'), 'admin_orders')]);
-            rows.push([Markup.button.callback(t(user, 'btn_admin_users', '👥 Utilisateurs'), 'admin_users')]);
+            rows.push([Markup.button.callback(t(user, 'btn_admin_orders', '📦 Commandes'), 'admin_orders'), Markup.button.callback(t(user, 'btn_admin_users', '👥 Utilisateurs'), 'admin_users')]);
             rows.push([Markup.button.callback(t(user, 'btn_admin_livreurs', '🚴 Livreurs'), 'admin_livreurs')]);
             rows.push([Markup.button.callback(t(user, 'btn_admin_stats', '📊 Statistiques'), 'admin_stats')]);
             rows.push([Markup.button.callback(supportLabel, 'admin_support_queue')]);
