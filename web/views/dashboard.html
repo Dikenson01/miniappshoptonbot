@@ -6903,8 +6903,8 @@
             if (userTableEl) {
                 userTableEl.innerHTML = users.map(u => `
                     <tr>
-                        <td data-label="Identité">
-                            <div class="user-info" onclick="openTelegramProfile('${u.username || ''}', '${u.platform_id || ''}')" style="cursor:pointer;" title="Ouvrir le profil Telegram">
+                        <td data-label="Identité" onclick="openTelegramProfile(event, '${u.username || ''}', '${u.platform_id || ''}')" style="cursor:pointer;" title="Ouvrir le profil Telegram">
+                            <div class="user-info">
                                 <div class="avatar">${u.first_name ? u.first_name[0] : '?'}</div>
                                 <div>
                                     <div style="display:flex; align-items:center; gap:5px;">
@@ -6953,8 +6953,8 @@
                     const escapedName = (u.first_name || '').replace(/'/g, "\\'");
 
                     return `
-                    <div class="m-user-card">
-                        <div class="m-user-top" onclick="openTelegramProfile('${u.username || ''}', '${u.platform_id || ''}')" style="cursor:pointer;" title="Ouvrir le profil Telegram">
+                    <div class="m-user-card" onclick="openTelegramProfile(event, '${u.username || ''}', '${u.platform_id || ''}')" style="cursor:pointer;">
+                        <div class="m-user-top" title="Ouvrir le profil Telegram">
                             <div class="m-user-avatar">${u.first_name ? u.first_name[0].toUpperCase() : '?'}</div>
                             <div class="m-user-info">
                                 <div class="m-user-name">
@@ -7785,8 +7785,14 @@
         /**
          * Ouvre une conversation avec le client sur Telegram
          */
-        function openTelegramProfile(username, platformId) {
-            if (username && username !== 'undefined') {
+        function openTelegramProfile(event, username, platformId) {
+            // Empêcher l'ouverture si on clique sur un bouton ou une icône de l'interface
+            if (event && event.target) {
+                const isClickableChild = event.target.closest('button, a, .m-user-actions, .stat-item, select');
+                if (isClickableChild) return;
+            }
+
+            if (username && username !== 'undefined' && username !== 'null') {
                 const cleanUsername = username.replace('@', '');
                 if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
                     try {
